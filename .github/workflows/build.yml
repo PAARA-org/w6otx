@@ -6,18 +6,31 @@ on: push
 jobs:
   build:
     runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        BUILD_TARGET: [release]
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build deb
-        uses: DominicOrsi/cargo-deb-ubuntu@1.0.0
+      - name: Rust Version Query
+        run: |
+          rustup show active-toolchain
+          rustc --version
+
+      - name: cargo deb
+        run: cargo install cargo-deb
+
+      - name: Build deb in ${{ matrix.BUILD_TARGET }} mode
+        run: cargo deb --profile "${{ matrix.BUILD_TARGET }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: w6otx
-          path: "*.deb"
+          path: "target/debian/*.deb"
 
       - name: Upload release
         uses: ncipollo/release-action@v1
