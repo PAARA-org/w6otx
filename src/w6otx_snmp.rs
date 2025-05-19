@@ -7,7 +7,7 @@ use strum::{AsRefStr, Display, EnumIter, EnumString, FromRepr, IntoStaticStr};
 #[strum(serialize_all = "kebab-case")]
 #[repr(u32)]
 pub enum Outlet {
-    LNA_33cm = 1,
+    Unused1 = 1,
     W6otx_Allstar_rPi = 2,
     DishyPOE = 3,
     Switch = 4,

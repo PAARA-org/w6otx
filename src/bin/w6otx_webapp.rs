@@ -1,4 +1,4 @@
-use maud::{html, PreEscaped, DOCTYPE};
+use maud::{DOCTYPE, PreEscaped, html};
 use snmp::SyncSession;
 use std::str::FromStr;
 use std::time::Duration;
