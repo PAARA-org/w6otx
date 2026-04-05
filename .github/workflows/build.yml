@@ -1,39 +1,18 @@
----
-name: Build Debian Packages
+name: Build Debian Package
 
-on: push
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: write
 
 jobs:
-  build:
-    runs-on: ubuntu-22.04       # to match debian bookworm on w6otx-net
-    
-    strategy:
-      matrix:
-        BUILD_TARGET: [release]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Rust Version Query
-        run: |
-          rustup show active-toolchain
-          rustc --version
-
-      - name: cargo deb
-        run: cargo install cargo-deb
-
-      - name: Build deb in ${{ matrix.BUILD_TARGET }} mode
-        run: cargo deb --profile "${{ matrix.BUILD_TARGET }}"
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: w6otx
-          path: "target/debian/*.deb"
-
-      - name: Upload release
-        uses: ncipollo/release-action@v1
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          artifacts: "target/debian/*.deb"
+  build-deb:
+    uses: charlieh0tel/deb-workflows/.github/workflows/rust-build-deb.yml@main
+    with:
+      targets: '[{"target":"x86_64-unknown-linux-gnu","os":"ubuntu-22.04","arch":"amd64"}]'
+    secrets: inherit
