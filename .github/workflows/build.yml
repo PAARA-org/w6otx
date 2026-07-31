@@ -6,13 +6,14 @@ on:
     tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   build-deb:
-    uses: charlieh0tel/deb-workflows/.github/workflows/rust-build-deb.yml@main
+    uses: charlieh0tel/deb-workflows/.github/workflows/rust-build-deb.yml@v1
     with:
       targets: '[{"target":"x86_64-unknown-linux-gnu","os":"ubuntu-22.04","arch":"amd64"}]'
     secrets: inherit
