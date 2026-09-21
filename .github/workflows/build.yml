@@ -11,25 +11,20 @@ on:
 jobs:
   build-deb:
     uses: charlieh0tel/deb-workflows/.github/workflows/rust-build-deb.yml@v1
-    # Scoped to this job.  At workflow level it would also be granted to
-    # the dispatch job below, which authenticates with its own PAT and
-    # writes nothing here.
+    # Scoped to this job rather than the workflow, so nothing else here
+    # gets write access to the repo.
     permissions:
       contents: write
     with:
       targets: '[{"target":"x86_64-unknown-linux-gnu","os":"ubuntu-22.04","arch":"amd64"}]'
 
-  trigger-apt-repo:
-    needs: build-deb
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Trigger APT repo rebuild
-        uses: peter-evans/repository-dispatch@v4
-        with:
-          # Requires an APT_REPO_TOKEN secret on PAARA-org/w6otx; until it
-          # is added this job fails and the APT repo picks the release up
-          # on its daily cron instead.
-          token: ${{ secrets.APT_REPO_TOKEN }}
-          repository: charlieh0tel/apt-repo
-          event-type: update-apt-repo
+# No job dispatching charlieh0tel/apt-repo, unlike the other packages in
+# that repo, and deliberately so: dispatching it needs a PAT with
+# Contents: write on apt-repo, and a secret here is readable by anyone
+# with push access to this repo -- which is a different, wider set of
+# people than the ones who can write to apt-repo today.  The APT repo
+# fetches the latest release of every repo in its packages.tsv on a daily
+# cron, so releases here still land there, just with up to a day of lag.
+# To pick one up sooner, run apt-repo's own update workflow:
+#
+#   gh workflow run update-repo.yml -R charlieh0tel/apt-repo
