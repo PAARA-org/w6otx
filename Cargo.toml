@@ -18,13 +18,13 @@ snmp = "0.2.2"
 clap = { version = "4.4.8", features = ["derive", "env"] }
 strum = { version = "0.25.0", features = ["derive", "strum_macros"] }
 #
-tide = "0.16.0"
-async-std = { version = "1.8.0", features = ["attributes"] }
+axum = "0.8.9"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
+tower-http = { version = "0.7.1", features = ["trace"] }
+tracing-subscriber = "0.3"
 serde = { version = "1.0", features = ["derive"] }
-femme = "2.2.1"
-serde_json = "1.0.108"
-mime = "0.3.17"
-maud = { version = "0.25.0", features = ["tide"] }
+maud = "0.27.0"
+tracing = "0.1.44"
 
 [package.metadata.deb]
 maintainer = "Christopher Hoover <ch@murgatroid.com>"

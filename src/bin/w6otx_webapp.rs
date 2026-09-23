@@ -1,10 +1,16 @@
+use axum::http::StatusCode;
+use axum::response::Html;
+use axum::routing::{get, post};
+use axum::{Json, Router};
 use maud::{DOCTYPE, PreEscaped, html};
+use serde::{Deserialize, Serialize};
 use snmp::SyncSession;
+use std::io::IsTerminal;
 use std::str::FromStr;
 use std::time::Duration;
 use strum::IntoEnumIterator;
-use tide::prelude::*;
-use tide::{Request, Response, StatusCode};
+use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
+use tracing::Level;
 use w6otx::w6otx_snmp;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -28,10 +34,17 @@ struct ControlOutlet {
     command: String,
 }
 
-async fn system_power_status(_: Request<()>) -> tide::Result {
+type HandlerError = (StatusCode, String);
+
+fn new_session() -> Result<SyncSession, HandlerError> {
     let community = b"private";
     let timeout = Duration::from_secs(5);
-    let mut session = SyncSession::new(DEFAULT_SNMP_HOST, community, Some(timeout), 0)?;
+    SyncSession::new(DEFAULT_SNMP_HOST, community, Some(timeout), 0)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
+async fn system_power_status() -> Result<Json<SystemPowerStatus>, HandlerError> {
+    let mut session = new_session()?;
     let statuses = w6otx_snmp::Outlet::iter()
         .filter(|outlet| !outlet.to_string().starts_with("unused"))
         .map(|outlet| {
@@ -45,50 +58,45 @@ async fn system_power_status(_: Request<()>) -> tide::Result {
             }
         })
         .collect();
-    let system_power_status = SystemPowerStatus { statuses };
-    let json = serde_json::to_string(&system_power_status)?;
-    let response = Response::builder(StatusCode::Ok)
-        .body(json)
-        .content_type("application/json")
-        .build();
-    Ok(response)
+    Ok(Json(SystemPowerStatus { statuses }))
 }
 
-async fn control_outlet(mut request: Request<()>) -> tide::Result {
-    let ControlOutlet { outlet, command } = request.body_json().await?;
-    let outlet = w6otx_snmp::Outlet::from_str(outlet.as_ref())?;
-    let command = w6otx_snmp::OutletControlCommand::from_str(command.as_ref())?;
-    let community = b"private";
-    let timeout = Duration::from_secs(5);
-    let mut session = SyncSession::new(DEFAULT_SNMP_HOST, community, Some(timeout), 0)?;
+async fn control_outlet(
+    Json(ControlOutlet { outlet, command }): Json<ControlOutlet>,
+) -> Result<&'static str, HandlerError> {
+    let bad_request = |e: strum::ParseError| (StatusCode::BAD_REQUEST, e.to_string());
+    let outlet = w6otx_snmp::Outlet::from_str(&outlet).map_err(bad_request)?;
+    let command = w6otx_snmp::OutletControlCommand::from_str(&command).map_err(bad_request)?;
+    let mut session = new_session()?;
     match w6otx_snmp::control_outlet(&mut session, outlet, command) {
-        Ok(_) => Ok("ok".into()),
-        Err(_) => Ok("failed".into()),
+        Ok(_) => Ok("ok"),
+        Err(_) => Ok("failed"),
     }
 }
 
-async fn root(_: Request<()>) -> tide::Result {
-    let response = Response::builder(StatusCode::Ok)
-        .body(root_page())
-        .content_type("text/html")
-        .build();
-    Ok(response)
+async fn root() -> Html<String> {
+    Html(root_page())
 }
 
-#[async_std::main]
-async fn main() -> tide::Result<()> {
-    femme::start();
+#[tokio::main]
+async fn main() -> std::io::Result<()> {
+    tracing_subscriber::fmt()
+        .with_max_level(Level::INFO)
+        .with_ansi(std::io::stdout().is_terminal())
+        .init();
 
-    let mut app = tide::new();
-    app.with(tide::log::LogMiddleware::new());
+    let app = Router::new()
+        .route("/", get(root))
+        .route("/system_power_status", get(system_power_status))
+        .route("/control_outlet", post(control_outlet))
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+                .on_response(DefaultOnResponse::new().level(Level::INFO)),
+        );
 
-    app.at("/").get(root);
-    app.at("/system_power_status").get(system_power_status);
-    app.at("/control_outlet").post(control_outlet);
-
-    app.listen("0.0.0.0:8080").await?;
-
-    Ok(())
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
+    axum::serve(listener, app).await
 }
 
 fn root_page() -> String {
